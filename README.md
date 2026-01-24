@@ -19,3 +19,6 @@ To use this project:
 - Set up .venv
 - Install Dependencies
 - Run "streamlit run app/ui.py" in terminal
+
+
+![FieldScout Demo](assets/demo.gif) 
