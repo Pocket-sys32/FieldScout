@@ -1,0 +1,21 @@
+# --- Security (NEVER UPLOAD THESE) ---
+credentials.json
+secrets.toml
+.env
+
+# --- System & Environment ---
+.venv/
+venv/
+__pycache__/
+.DS_Store
+.idea/
+.vscode/
+
+# --- Data (Too big for GitHub) ---
+data/raw/
+data/training_images/
+FieldScout-1/
+runs/
+
+# --- Models (Optional: Keep best.pt if it's small enough, otherwise ignore) ---
+# models/

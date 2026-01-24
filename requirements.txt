@@ -1,0 +1,18 @@
+# --- AI & Vision ---
+ultralytics==8.3.0
+opencv-python-headless
+Pillow
+easyocr                 # For reading video timestamps (Vision)
+
+# --- Metadata ---
+hachoir                 # For reading video timestamps (Metadata)
+
+# --- Interface ---
+streamlit
+watchdog
+
+# --- Data & Reporting ---
+pandas
+gspread
+oauth2client
+openpyxl
