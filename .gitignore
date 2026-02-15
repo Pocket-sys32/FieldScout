@@ -1,4 +1,4 @@
-# --- Security (NEVER UPLOAD THESE) ---
+# --- Security  ---
 credentials.json
 secrets.toml
 .env
@@ -17,5 +17,5 @@ data/training_images/
 FieldScout-1/
 runs/
 
-# --- Models (Optional: Keep best.pt if it's small enough, otherwise ignore) ---
+# --- Models ---
 # models/

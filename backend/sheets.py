@@ -4,11 +4,28 @@ import os
 
 # --- SCIENTIFIC NAME LOOKUP (add more later) ---
 SCIENTIFIC_NAMES = {
-    "coyote": "Canis latrans",
-    "deer": "Odocoileus hemionus",
+    "beaver": "Castor canadensis",
     "bobcat": "Lynx rufus",
-    "fox": "Urocyon cinereoargenteus",
+    "coyote": "Canis latrans",
+    "striped skunk": "Mephitis mephitis",
+    "opossum": "Didelphis virginiana",
+    "bt deer": "Odocoileus hemionus columbianus", # Black-tailed Deer
+    "gray fox": "Urocyon cinereoargenteus",
     "raccoon": "Procyon lotor",
+    "desert cottontail": "Sylvilagus audubonii",
+    "fox squirrel": "Sciurus niger",
+    "ca ground squirrel": "Otospermophilus beecheyi",
+    "ca quail": "Callipepla californica",
+    "golden-crown sparrow": "Zonotrichia atricapilla",
+    "wild turkey": "Meleagris gallopavo",
+    "river otter": "Lontra canadensis",
+    "ca scrub jay": "Aphelocoma californica",
+    "american badger": "Taxidea taxus",
+    "ca towhee": "Melozone crissalis",
+    "northern mockingbird": "Mimus polyglottos",
+    "anna's hummingbird": "Calypte anna",
+    "raptor": "Raptor sp.",                # General term for birds of prey
+    "frog sp.": "Anura sp."                # General term for frogs/toads
 }
 
 
