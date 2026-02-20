@@ -13,6 +13,7 @@
 - **CV:** Ultralytics Yolov8, OpenCV, EasyOCR
 - **UI:** Steamlit
 - **Data:** Google Sheets API, Pandas
+- **Model trained by:** Roboflow
 
 To use this project:
 - Clone the repo
