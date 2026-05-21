@@ -1,0 +1,40 @@
+# ── Wildlife Detection ────────────────────────────────────────────────────────
+# MegaDetector v6 via PytorchWildlife (Microsoft)
+PytorchWildlife>=0.5.0
+torch>=2.1.0
+torchvision>=0.16.0
+# PytorchWildlife bioacoustics dependencies (required even for vision-only use)
+soundfile>=0.12.1
+librosa>=0.10.0
+
+# CLIP zero-shot species classifier
+transformers>=4.35.0
+huggingface-hub>=0.19.0
+
+# ── Video Processing ──────────────────────────────────────────────────────────
+opencv-python-headless>=4.9.0
+pymediainfo>=6.1.0
+easyocr>=1.7.0
+
+# ── Google Sheets ─────────────────────────────────────────────────────────────
+gspread>=6.0.0
+google-auth>=2.25.0
+
+# ── GUI ───────────────────────────────────────────────────────────────────────
+customtkinter>=5.2.2
+tkinterdnd2>=0.3.0
+
+# ── Utilities ─────────────────────────────────────────────────────────────────
+Pillow>=10.1.0
+numpy>=1.26.0
+python-dateutil>=2.8.2
+tqdm>=4.66.0
+requests>=2.31.0
+
+# ── Phase-2 Training (Colab / workstation only) ───────────────────────────────
+# timm>=0.9.12           # EfficientNet-B0 for fine-tuning
+# onnx>=1.15.0           # Export trained model to ONNX
+# onnxruntime>=1.16.3    # Inference with custom ONNX model
+
+# ── Packaging ─────────────────────────────────────────────────────────────────
+# pyinstaller>=6.3.0     # Uncomment when building .exe

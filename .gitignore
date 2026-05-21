@@ -1,0 +1,35 @@
+# ── Credentials (NEVER commit these) ─────────────────────────────────────────
+service_account.json
+.kaggle/
+
+# ── Large model / cache files ─────────────────────────────────────────────────
+models/
+*.pt
+*.onnx
+*.h5
+*.pb
+
+# ── PyInstaller build output ──────────────────────────────────────────────────
+build/
+dist/
+*.spec
+
+# ── Runtime artifacts ─────────────────────────────────────────────────────────
+*.log
+*.tmp
+*.csv
+crops/
+detections.csv
+timestamp_strip.jpg
+.deps_installed
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
