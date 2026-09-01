@@ -119,6 +119,42 @@ class SheetsWriter:
     def flush(self) -> None:
         """No-op (rows are written immediately); kept for interface symmetry."""
 
+    def get_processed_filenames(self) -> set[str]:
+        """
+        Return normalised (lowercase) filenames already in the Sheet and/or CSV.
+        """
+        processed: set[str] = set()
+
+        try:
+            self._ensure_sheets()
+            for name in self._worksheet.col_values(6)[1:]:
+                name = name.strip()
+                if name:
+                    processed.add(name.lower())
+            logger.info(
+                "Loaded %d already-processed filename(s) from Google Sheet.",
+                len(processed),
+            )
+        except Exception as exc:
+            logger.warning(
+                "Could not read processed filenames from Sheet (%s). "
+                "Falling back to local CSV.",
+                exc,
+            )
+
+        if self.output_csv.exists():
+            try:
+                with self.output_csv.open(newline="", encoding="utf-8") as f:
+                    reader = csv.reader(f)
+                    next(reader, None)
+                    for row in reader:
+                        if len(row) > 5 and row[5].strip():
+                            processed.add(row[5].strip().lower())
+            except Exception as exc:
+                logger.warning("Could not read local CSV for skip list: %s", exc)
+
+        return processed
+
     # ------------------------------------------------------------------
     # Row builder
     # ------------------------------------------------------------------
@@ -126,9 +162,13 @@ class SheetsWriter:
     @staticmethod
     def _build_row(result: VideoResult, filename: str) -> list[str]:
         if result.recorded_at:
-            local_dt = result.recorded_at.astimezone()  # local timezone
-            date_str = local_dt.strftime("%m/%d/%Y")
-            time_str = local_dt.strftime("%H:%M:%S")
+            dt = result.recorded_at
+            # OCR timestamps are already local camera time — do not shift timezone.
+            if dt.tzinfo is not None and result.timestamp_source != "ocr":
+                dt = dt.astimezone()
+            date_str = dt.strftime("%m/%d/%Y")
+            # Leading apostrophe forces Google Sheets to keep 24-hour text as-is.
+            time_str = "'" + dt.strftime("%H:%M:%S")
         else:
             date_str = ""
             time_str = ""

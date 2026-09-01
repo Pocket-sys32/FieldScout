@@ -599,9 +599,44 @@ class _App:
                 worksheet_name       = cfg.worksheet_name,
                 output_csv           = cfg.output_csv_resolved,
             )
-            total = len(self._mov_files)
 
-            for v_idx, video_path in enumerate(self._mov_files):
+            from .pipeline import _normalize_filename
+
+            already_done: set[str] = set()
+            try:
+                already_done = writer.get_processed_filenames()
+            except Exception as _skip_exc:
+                self._ui_queue.put((
+                    "log_tagged",
+                    f"Could not load skip list: {_skip_exc}",
+                    "warn",
+                ))
+
+            pending = [
+                f for f in self._mov_files
+                if _normalize_filename(f.name) not in already_done
+            ]
+            skipped = [f for f in self._mov_files if f not in pending]
+
+            if skipped:
+                for vid in skipped:
+                    self._ui_queue.put((
+                        "log_tagged",
+                        f"Skipped (already in Sheet): {vid.name}",
+                        "dim",
+                    ))
+            if not pending:
+                self._ui_queue.put((
+                    "log_tagged",
+                    "All videos in this folder have already been processed.",
+                    "dim",
+                ))
+                self._ui_queue.put(("done", 0))
+                return
+
+            total = len(pending)
+
+            for v_idx, video_path in enumerate(pending):
                 if self._stop_event.is_set():
                     break
                 self._ui_queue.put(("status", video_path.name))

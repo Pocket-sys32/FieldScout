@@ -218,11 +218,11 @@ def _ts_from_metadata(path: Path) -> datetime | None:
 
 
 _BUSHNELL_OCR_PATTERN = re.compile(
-    # Matches Bushnell formats like "02 - 23- 2026  03 : 01 : 51"
-    # or compact "02/23/2026 03:01:51"
     r"(\d{1,2})\s*[/\-]\s*(\d{1,2})\s*[/\-]\s*(\d{2,4})"
     r"\s+"
     r"(\d{1,2})\s*:\s*(\d{2})\s*:\s*(\d{2})"
+    r"\s*(AM|PM)?",
+    re.IGNORECASE,
 )
 
 
@@ -261,10 +261,16 @@ def _ts_from_ocr(frame: np.ndarray) -> datetime | None:
 
         m = _BUSHNELL_OCR_PATTERN.search(text)
         if m:
-            mo, day, yr, hr, mn, sc = (int(x) for x in m.groups())
+            mo, day, yr, hr, mn, sc = (int(x) for x in m.groups()[:6])
+            ampm = m.group(7)
             if yr < 100:
                 yr += 2000
-            return datetime(yr, mo, day, hr, mn, sc, tzinfo=timezone.utc)
+            if ampm and ampm.upper() == "PM" and hr < 12:
+                hr += 12
+            elif ampm and ampm.upper() == "AM" and hr == 12:
+                hr = 0
+            # Naive local time — matches what the camera burned into the frame.
+            return datetime(yr, mo, day, hr, mn, sc)
 
     except ImportError:
         logger.debug("easyocr not installed — OCR timestamp fallback disabled.")

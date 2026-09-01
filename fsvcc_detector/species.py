@@ -1,15 +1,12 @@
 """
-Species registry for the 13 target species at FSVCC.
+Species registry for Cache Creek trail-camera targets.
 
 Each entry contains:
   - key              : internal snake_case identifier
   - common_name      : display name written to the Google Sheet
   - scientific_name  : written to the Scientific Name column
   - clip_prompts     : text prompts used by the CLIP zero-shot classifier
-                       (more prompts = more robust embedding; keep them
-                        descriptive of trail-cam imagery)
-  - speciesnet_taxa  : SpeciesNet / iNaturalist taxon strings for future
-                       integration with the speciesnet package
+  - speciesnet_taxa  : SpeciesNet / iNaturalist taxon strings
 """
 
 from __future__ import annotations
@@ -22,6 +19,16 @@ class SpeciesEntry(TypedDict):
     scientific_name: str
     clip_prompts: list[str]
     speciesnet_taxa: list[str]
+
+
+# MegaDetector person class — not voted on by CLIP/SpeciesNet wildlife list.
+HUMAN_ENTRY: SpeciesEntry = {
+    "key": "human",
+    "common_name": "Human",
+    "scientific_name": "Homo sapiens",
+    "clip_prompts": [],
+    "speciesnet_taxa": ["homo sapiens"],
+}
 
 
 SPECIES_LIST: list[SpeciesEntry] = [
@@ -138,21 +145,44 @@ SPECIES_LIST: list[SpeciesEntry] = [
         "speciesnet_taxa": ["sylvilagus audubonii"],
     },
     {
-        "key": "squirrel",
-        "common_name": "Squirrel",
-        "scientific_name": "Sciuridae spp.",
+        "key": "ground_squirrel",
+        "common_name": "California Ground Squirrel",
+        "scientific_name": "Otospermophilus beecheyi",
         "clip_prompts": [
-            "a squirrel photographed by a trail camera",
-            "a California ground squirrel",
-            "a western gray squirrel in a tree",
-            "a tree squirrel with a bushy tail",
-            "a ground squirrel in dry grass",
+            "a California ground squirrel photographed by a trail camera",
+            "a ground squirrel standing on hind legs in dry grass",
+            "a brown ground squirrel on the ground not in a tree",
+            "an otospermophilus beecheyi ground squirrel",
+        ],
+        "speciesnet_taxa": ["otospermophilus beecheyi"],
+    },
+    {
+        "key": "fox_squirrel",
+        "common_name": "Fox Squirrel",
+        "scientific_name": "Sciurus niger",
+        "clip_prompts": [
+            "a fox squirrel photographed by a trail camera",
+            "a large tree squirrel with a bushy orange-brown tail",
+            "a sciurus niger fox squirrel climbing or on a branch",
+            "a fox squirrel with reddish fur",
+        ],
+        "speciesnet_taxa": ["sciurus niger"],
+    },
+    {
+        "key": "bird",
+        "common_name": "Bird",
+        "scientific_name": "Aves spp.",
+        "clip_prompts": [
+            "a bird photographed by a trail camera",
+            "a wild bird on the ground",
+            "a small bird in brush",
+            "a bird with feathers in a trail cam image",
         ],
         "speciesnet_taxa": [
-            "sciurus griseus",
-            "otospermophilus beecheyi",
-            "sciurus niger",
-            "tamiasciurus douglasii",
+            "aves",
+            "passeriformes",
+            "columbiformes",
+            "galliformes",
         ],
     },
     {
@@ -196,6 +226,10 @@ SPECIES_LIST: list[SpeciesEntry] = [
 # ── Lookup helpers ─────────────────────────────────────────────────────────────
 
 _BY_KEY: dict[str, SpeciesEntry] = {s["key"]: s for s in SPECIES_LIST}
+_BY_KEY["human"] = HUMAN_ENTRY
+
+# SpeciesNet class labels that should map to generic "bird" (order/family level).
+_BIRD_CLASS_HINTS = ("aves", "bird", "passeriformes", "columbiformes", "galliformes")
 
 
 def by_key(key: str) -> SpeciesEntry | None:
@@ -213,7 +247,6 @@ def scientific_name(key: str) -> str:
     return entry["scientific_name"] if entry else "Unknown"
 
 
-# All text prompts flattened, paired with their species index (for CLIP batch)
 def all_prompts() -> tuple[list[str], list[int]]:
     """Return (prompts, species_indices) for pre-computing CLIP text features."""
     prompts: list[str] = []

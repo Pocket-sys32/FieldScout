@@ -37,14 +37,21 @@ _load_lock = threading.Lock()
 
 # ── Public data class ──────────────────────────────────────────────────────────
 
+# MegaDetector class IDs
+_CLASS_ANIMAL = 0
+_CLASS_PERSON = 1
+# class 2 = vehicle — ignored
+
+
 @dataclass
 class AnimalBox:
-    """A single MegaDetector animal detection, coordinates normalised to [0,1]."""
+    """A single MegaDetector detection, coordinates normalised to [0,1]."""
     x1: float
     y1: float
     x2: float
     y2: float
     confidence: float
+    label: str = "animal"   # 'animal' | 'person'
 
     def to_norm_list(self) -> list[float]:
         return [self.x1, self.y1, self.x2, self.y2]
@@ -52,6 +59,14 @@ class AnimalBox:
     @property
     def area(self) -> float:
         return max(0.0, self.x2 - self.x1) * max(0.0, self.y2 - self.y1)
+
+    @property
+    def is_person(self) -> bool:
+        return self.label == "person"
+
+    @property
+    def is_animal(self) -> bool:
+        return self.label == "animal"
 
 
 # ── Detector class ────────────────────────────────────────────────────────────
@@ -199,9 +214,14 @@ class AnimalDetector:
             class_id   = int(dets.class_id[i]) if hasattr(dets, "class_id") else 0
             confidence = float(dets.confidence[i]) if hasattr(dets, "confidence") else 1.0
 
-            # Only keep animal detections (class 0)
-            if class_id != 0:
+            # Keep animals (0) and people (1); ignore vehicles (2)
+            if class_id == _CLASS_ANIMAL:
+                label = "animal"
+            elif class_id == _CLASS_PERSON:
+                label = "person"
+            else:
                 continue
+
             if confidence < self.confidence_threshold:
                 continue
 
@@ -211,6 +231,7 @@ class AnimalDetector:
                 x2=float(xyxy[2]) / w,
                 y2=float(xyxy[3]) / h,
                 confidence=confidence,
+                label=label,
             ))
 
         return boxes

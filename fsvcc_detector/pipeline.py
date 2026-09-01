@@ -164,6 +164,21 @@ class Pipeline:
             classifications = []
             for box in boxes:
                 try:
+                    if box.is_person:
+                        from .classifier import ClassificationResult
+                        classifications.append(ClassificationResult(
+                            species_key="human",
+                            common_name="Human",
+                            scientific_name="Homo sapiens",
+                            confidence=box.confidence,
+                            top3=[("human", box.confidence)],
+                            backend="megadetector",
+                        ))
+                        if save_crops:
+                            crop = self.detector.crop(vframe.image, box)
+                            _save_crop(crop, path, i, "human", _crops_dir)
+                        continue
+
                     crop = self.detector.crop(vframe.image, box)
                     clf  = self.classifier.classify(
                         crop,
@@ -172,7 +187,7 @@ class Pipeline:
                     )
                     classifications.append(clf)
 
-                    if save_crops and crops_dir:
+                    if save_crops:
                         _save_crop(crop, path, i, clf.species_key, _crops_dir)
 
                 except Exception as exc:
@@ -232,7 +247,27 @@ class Pipeline:
         mov_files = _find_videos(folder)
         results: list[ProcessingResult] = []
 
-        for video_path in mov_files:
+        already_done: set[str] = set()
+        if sheets_writer is not None:
+            try:
+                already_done = sheets_writer.get_processed_filenames()
+            except Exception as exc:
+                logger.warning("Could not build skip list: %s", exc)
+
+        skipped = [f for f in mov_files if _normalize_filename(f.name) in already_done]
+        to_process = [f for f in mov_files if _normalize_filename(f.name) not in already_done]
+
+        if skipped:
+            logger.info(
+                "Skipping %d already-processed video(s): %s",
+                len(skipped),
+                ", ".join(f.name for f in skipped),
+            )
+        if not to_process:
+            logger.info("All videos in this folder have already been processed.")
+            return results
+
+        for video_path in to_process:
             if stop_event and stop_event.is_set():
                 logger.info("Processing cancelled by user.")
                 break
@@ -258,15 +293,23 @@ class Pipeline:
 
 # ── Crop saving helper ────────────────────────────────────────────────────────
 
-_VIDEO_EXTENSIONS = ("*.mov", "*.MOV", "*.avi", "*.AVI", "*.mp4", "*.MP4")
+_VIDEO_SUFFIXES = {".mov", ".avi", ".mp4", ".mkv", ".mts", ".mpeg", ".mpg"}
 
 
 def _find_videos(folder: Path) -> list[Path]:
     """Return all supported video files in `folder`, sorted by name."""
-    files: list[Path] = []
-    for pattern in _VIDEO_EXTENSIONS:
-        files.extend(folder.glob(pattern))
-    return sorted(set(files))
+    if not folder.is_dir():
+        return []
+    files = [
+        p for p in folder.iterdir()
+        if p.is_file() and p.suffix.lower() in _VIDEO_SUFFIXES
+    ]
+    return sorted(files, key=lambda p: p.name.lower())
+
+
+def _normalize_filename(name: str) -> str:
+    """Case-insensitive filename key for skip-list matching."""
+    return name.strip().lower()
 
 
 def _save_crop(

@@ -32,7 +32,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .species import SPECIES_LIST, all_prompts, by_key
+from .species import SPECIES_LIST, HUMAN_ENTRY, _BIRD_CLASS_HINTS, all_prompts, by_key
 
 logger = logging.getLogger(__name__)
 
@@ -415,11 +415,12 @@ class SpeciesClassifier:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-# Build reverse map: lower-case taxon string → species key (built once at import)
+# Build reverse map: lower-case taxon string -> species key (built once at import)
 _TAXON_TO_KEY: dict[str, str] = {}
 for _sp in SPECIES_LIST:
     for _taxon in _sp["speciesnet_taxa"]:
         _TAXON_TO_KEY[_taxon.lower()] = _sp["key"]
+_TAXON_TO_KEY["homo sapiens"] = "human"
 
 
 def _parse_speciesnet_label(label: str) -> tuple[str, str, str]:
@@ -442,23 +443,33 @@ def _parse_speciesnet_label(label: str) -> tuple[str, str, str]:
 def _match_taxa_parsed(
     parsed: list[tuple[str, str, str]], scores: list[float]
 ) -> tuple[str, float]:
-    """Map parsed SpeciesNet labels to one of our 13 species keys."""
+    """Map parsed SpeciesNet labels to one of our species keys."""
     for (sci, common, raw), score in zip(parsed, scores):
-        # Skip blanks / vehicles / humans
+        raw_lower = raw.lower()
+
         if not sci and not common:
             continue
-        if any(x in raw.lower() for x in ("blank", "human", "vehicle", "homo sapiens")):
+        if any(x in raw_lower for x in ("blank", "vehicle", "empty")):
             continue
+
+        # Human — map directly instead of skipping
+        if any(x in raw_lower for x in ("human", "homo sapiens", "homo")):
+            return "human", float(score)
 
         # Try scientific name match first (most reliable)
         if sci:
             c = sci.lower()
             if c in _TAXON_TO_KEY:
                 return _TAXON_TO_KEY[c], float(score)
-            # Partial: our taxon is a prefix of SpeciesNet's name (subspecies)
             for taxon, key in _TAXON_TO_KEY.items():
                 if c.startswith(taxon) or taxon.startswith(c.split()[0]):
                     return key, float(score)
+
+        # Generic bird fallback for unmatched avian taxa
+        if any(hint in raw_lower or hint in (sci or "").lower() or hint in (common or "").lower()
+               for hint in _BIRD_CLASS_HINTS):
+            if "callipepla" not in raw_lower and "zonotrichia" not in raw_lower:
+                return "bird", float(score)
 
         # Try common name match as fallback
         if common:
