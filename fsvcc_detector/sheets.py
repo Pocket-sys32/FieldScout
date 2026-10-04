@@ -33,7 +33,6 @@ from __future__ import annotations
 import csv
 import logging
 import threading
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -163,12 +162,12 @@ class SheetsWriter:
     def _build_row(result: VideoResult, filename: str) -> list[str]:
         if result.recorded_at:
             dt = result.recorded_at
-            # OCR timestamps are already local camera time — do not shift timezone.
-            if dt.tzinfo is not None and result.timestamp_source != "ocr":
-                dt = dt.astimezone()
+            # Preserve the clock value recorded by the camera. Some trail-camera
+            # files label local wall time as UTC, so converting the timezone can
+            # change only the hour and produce a believable but incorrect time.
             date_str = dt.strftime("%m/%d/%Y")
-            # Leading apostrophe forces Google Sheets to keep 24-hour text as-is.
-            time_str = "'" + dt.strftime("%H:%M:%S")
+            # Store explicit 12-hour text so Sheets cannot reinterpret the time.
+            time_str = "'" + dt.strftime("%I:%M:%S %p")
         else:
             date_str = ""
             time_str = ""

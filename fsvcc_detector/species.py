@@ -21,12 +21,18 @@ class SpeciesEntry(TypedDict):
     speciesnet_taxa: list[str]
 
 
-# MegaDetector person class — not voted on by CLIP/SpeciesNet wildlife list.
+# MegaDetector normally finds people directly. Human prompts are also included
+# in CLIP so a person mislabelled as an animal does not become a coyote.
 HUMAN_ENTRY: SpeciesEntry = {
     "key": "human",
     "common_name": "Human",
     "scientific_name": "Homo sapiens",
-    "clip_prompts": [],
+    "clip_prompts": [
+        "a person photographed by a trail camera",
+        "a human walking outdoors at night",
+        "a person in infrared trail camera footage",
+        "a human standing or crouching in the woods",
+    ],
     "speciesnet_taxa": ["homo sapiens"],
 }
 
@@ -223,6 +229,10 @@ SPECIES_LIST: list[SpeciesEntry] = [
     },
 ]
 
+# Keep HUMAN_ENTRY out of SPECIES_LIST so existing custom ONNX models retain
+# their original output order. CLIP can safely use the expanded candidate set.
+CLIP_SPECIES_LIST: list[SpeciesEntry] = [*SPECIES_LIST, HUMAN_ENTRY]
+
 # ── Lookup helpers ─────────────────────────────────────────────────────────────
 
 _BY_KEY: dict[str, SpeciesEntry] = {s["key"]: s for s in SPECIES_LIST}
@@ -251,7 +261,7 @@ def all_prompts() -> tuple[list[str], list[int]]:
     """Return (prompts, species_indices) for pre-computing CLIP text features."""
     prompts: list[str] = []
     indices: list[int] = []
-    for i, species in enumerate(SPECIES_LIST):
+    for i, species in enumerate(CLIP_SPECIES_LIST):
         for p in species["clip_prompts"]:
             prompts.append(p)
             indices.append(i)

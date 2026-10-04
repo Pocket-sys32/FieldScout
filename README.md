@@ -1,7 +1,7 @@
 # Cache Creek Game Camera Project
 
-Automated species identification for Bushnell trail-cam `.mov` files.
-Detects the 13 target species, counts simultaneous animals, and writes results directly to your Google Sheet.
+Automated species identification for Bushnell trail-cam video files.
+Detects 15 wildlife targets plus humans, counts simultaneous animals, and writes results directly to your Google Sheet.
 
 ---
 
@@ -9,12 +9,15 @@ Detects the 13 target species, counts simultaneous animals, and writes results d
 
 1. **Install Python 3.10+** from [python.org](https://python.org) — check "Add Python to PATH" during install.
 2. **Double-click `run.bat`** — it installs all dependencies automatically on first launch (takes ~5 min and needs internet; subsequent launches are instant).
+   Each normal launch also checks the configured Git upstream, installs a safe fast-forward update when the checkout has no local edits, and refreshes changed dependencies inside `.venv`.
 3. **First run downloads the AI models** (~500 MB total, cached locally — only once).
 4. In the app, click **⚙ Settings** and fill in:
    - *Google Sheet ID* — the long string in your Sheet's URL between `/d/` and `/edit`
    - *Service account JSON path* — path to the key file (see Google Sheets Setup below)
 5. **Browse or drag** a folder of `.mov` files onto the drop zone.
 6. Click **▶ Process Videos** — results appear in the log and are written to the Sheet in real time.
+
+Settings are stored in the local `config.json`. That file and the service-account key are excluded from Git, so each computer keeps its own credentials and Sheet configuration during updates.
 
 ---
 
@@ -31,27 +34,19 @@ Detects the 13 target species, counts simultaneous animals, and writes results d
 | Gray Fox | *Urocyon cinereoargenteus* |
 | Raccoon | *Procyon lotor* |
 | Desert Cottontail | *Sylvilagus audubonii* |
-| Squirrel | *Sciuridae spp.* |
+| California Ground Squirrel | *Otospermophilus beecheyi* |
+| Fox Squirrel | *Sciurus niger* |
+| Bird | *Aves spp.* |
 | California Quail | *Callipepla californica* |
 | Golden-crowned Sparrow | *Zonotrichia atricapilla* |
 | North American River Otter | *Lontra canadensis* |
+| Human | *Homo sapiens* |
 
 ---
 
-## SpeciesNet Setup (one-time, free — strongly recommended for IR footage)
+## SpeciesNet Setup (one-time, free)
 
-SpeciesNet is Google's camera-trap AI, trained on millions of night-IR and day images from Wildlife Insights. It handles Bushnell IR footage much better than CLIP.
-
-1. Create a free account at [kaggle.com](https://www.kaggle.com)
-2. Go to **Account → Settings → API → Create New Token**
-3. A file called `kaggle.json` downloads — save it to:
-   ```
-   C:\Users\<your username>\.kaggle\kaggle.json
-   ```
-   (Create the `.kaggle` folder if it doesn't exist)
-4. Run the app — SpeciesNet downloads automatically (~500 MB, once only)
-
-The app falls back to CLIP automatically if `kaggle.json` is missing, so this step is optional but recommended.
+SpeciesNet is Google's camera-trap AI, trained on millions of night-IR and day images from Wildlife Insights. It handles Bushnell IR footage better than the general-purpose CLIP fallback. The Python dependency is installed with FieldScout, and its model downloads automatically on first use. If the model cannot load or download, FieldScout logs the reason and continues with CLIP.
 
 ---
 
@@ -79,7 +74,7 @@ The app falls back to CLIP automatically if `kaggle.json` is missing, so this st
 Make sure Row 1 of the target worksheet tab contains exactly these headers (copy-paste):
 
 ```
-Date    Time    Common Name    Scientific Name    Count    Filename    Comments    Confidence    Needs Review
+Date    Time    Species Captured    Scientific Name    Numbers of same species present    picture number    Comment    Confidence Int.    Review
 ```
 
 The app will append one row below the header per processed video.
@@ -91,14 +86,14 @@ The app will append one row below the header per processed video.
 | Column | Description |
 |---|---|
 | **Date** | Recording date (MM/DD/YYYY) extracted from video metadata |
-| **Time** | Recording time (HH:MM:SS) extracted from video metadata |
-| **Common Name** | Detected species common name |
+| **Time** | Recording time (`hh:mm:ss AM/PM`) preserved from the camera clock |
+| **Species Captured** | Detected species common name |
 | **Scientific Name** | Binomial nomenclature |
-| **Count** | Max number of animals seen simultaneously in any frame |
-| **Filename** | Source `.mov` file name |
-| **Comments** | Auto-notes: "Night IR", "Multiple species detected", etc. |
-| **Confidence** | AI confidence score (0.000–1.000) |
-| **Needs Review** | `TRUE` when confidence < 65% or two species are nearly tied |
+| **Numbers of same species present** | Conservative median number of matching animals seen per sampled frame |
+| **picture number** | Source video file name |
+| **Comment** | Auto-notes: "Night IR", possible second species, etc. |
+| **Confidence Int.** | AI confidence score (0.000–1.000) |
+| **Review** | `TRUE` when confidence < 65% or two species are nearly tied |
 
 ---
 
@@ -112,47 +107,13 @@ python main.py --batch C:\path\to\video_folder
 
 Results still go to the Sheet and `detections.csv`.
 
+Use `python main.py --no-update` to launch without the Git update check.
+
 ---
 
-## Improving Accuracy — Phase 2 Fine-Tuning
+## Correcting Results
 
-**Phase 1** (default) uses CLIP zero-shot — no training needed, ~75–85% accuracy.
-
-**Phase 2** fine-tunes EfficientNet-B0 on your own footage → ~88–95% accuracy.
-
-### Step 1 — Build the review set
-
-Run this after processing a batch (or on your existing archive):
-
-```bat
-python scripts\build_review_set.py --videos C:\path\to\movs --output review_crops
-```
-
-This saves every detected animal crop as a JPEG organised into per-species folders.
-
-### Step 2 — Verify crops (volunteers)
-
-Open `review_crops\` in File Explorer.  Move mis-labelled images to the correct folder.
-You need roughly **200–500 verified images per species** for a good fine-tune.
-
-### Step 3 — Train (GPU workstation / Google Colab)
-
-```bash
-# Install training extras
-pip install timm onnx onnxruntime
-
-python scripts/train_classifier.py \
-    --data   review_crops/ \
-    --epochs 30 \
-    --output models/fsvcc_classifier.onnx
-```
-
-Upload to Google Colab for free GPU if your machine is CPU-only.
-
-### Step 4 — Switch the app to Phase 2
-
-In **⚙ Settings**, set *Custom ONNX classifier path* to `models/fsvcc_classifier.onnx`.
-The app switches backends automatically on next launch.
+Sheet entries can be edited manually. The dropdown for **Species Captured** should include the exact output labels above, plus **No Animal Detected** and **Unknown Animal**. A Sheet correction changes that record only; the current model does not read corrections back from Google Sheets or retrain itself.
 
 ---
 
@@ -174,7 +135,7 @@ The app switches backends automatically on next launch.
 FSvCC/
 ├── fsvcc_detector/        Python package
 │   ├── config.py          Settings (persisted to config.json)
-│   ├── species.py         13-species registry + CLIP prompts
+│   ├── species.py         Species registry + CLIP prompts
 │   ├── video.py           .mov frame extraction + Bushnell timestamp parsing
 │   ├── detector.py        MegaDetector v6 wrapper
 │   ├── classifier.py      CLIP zero-shot + ONNX Phase-2 classifier
@@ -182,9 +143,6 @@ FSvCC/
 │   ├── pipeline.py        End-to-end processing orchestrator
 │   ├── sheets.py          Google Sheets + CSV writer
 │   └── gui.py             CustomTkinter desktop GUI
-├── scripts/
-│   ├── build_review_set.py   Export crops for volunteer review
-│   └── train_classifier.py   Phase-2 EfficientNet-B0 fine-tuning
 ├── models/                Downloaded weights cached here
 ├── main.py                Entry point (GUI or CLI)
 ├── requirements.txt
@@ -204,4 +162,6 @@ FSvCC/
 
 **Models downloading slowly** — The first run downloads ~500 MB.  Run on a fast internet connection once; subsequent runs are instant.
 
-**Wrong species identified** — Add the clip to the review set and correct the label; this data feeds Phase-2 training and will improve future accuracy.
+**Wrong species identified** — Correct the Sheet row. This fixes the record but does not retrain SpeciesNet or CLIP.
+
+**Automatic update skipped** — FieldScout protects local work. Commit or stash tracked changes and make sure the current branch has a configured Git upstream. The app continues using the installed version when offline.

@@ -53,12 +53,6 @@ class Config:
     output_csv: str = "detections.csv"
     """Local CSV backup written alongside every run."""
 
-    crops_dir: str = "crops"
-    """Directory where animal crops are saved (used by build_review_set.py)."""
-
-    save_crops: bool = False
-    """Set True to save every detected-animal crop to crops_dir."""
-
     # ── Model / hardware ──────────────────────────────────────────────────────
     device: str = "cpu"
     """Torch device ('cpu' or 'cuda')."""
@@ -96,10 +90,6 @@ class Config:
     @property
     def output_csv_resolved(self) -> Path:
         return self.resolved_path(self.output_csv)
-
-    @property
-    def crops_dir_resolved(self) -> Path:
-        return self.resolved_path(self.crops_dir)
 
     # ------------------------------------------------------------------
     @classmethod

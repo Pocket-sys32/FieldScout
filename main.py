@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -88,12 +89,25 @@ def main() -> None:
         "--version", action="store_true",
         help="Print version and exit.",
     )
+    parser.add_argument(
+        "--no-update", action="store_true",
+        help="Start without checking the configured Git upstream for updates.",
+    )
     args = parser.parse_args()
 
     if args.version:
         from fsvcc_detector import __version__
         print(f"Cache Creek Game Camera Project  v{__version__}")
         return
+
+    if not args.no_update and os.environ.get("FIELDSCOUT_SKIP_UPDATE") != "1":
+        from fsvcc_detector.updater import sync_dependencies, update_from_git
+
+        repo_dir = Path(__file__).resolve().parent
+        updated = update_from_git(repo_dir)
+        sync_dependencies(repo_dir)
+        if updated:
+            os.execv(sys.executable, [sys.executable, *sys.argv])
 
     if args.batch:
         _run_cli_batch(Path(args.batch))

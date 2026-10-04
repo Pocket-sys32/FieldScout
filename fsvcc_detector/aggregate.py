@@ -27,9 +27,9 @@ from .detector import AnimalBox
 logger = logging.getLogger(__name__)
 
 # Runner-up must reach this fraction of the winner's score to count as multi-species.
-_MULTI_SPECIES_RATIO = 0.35
+_MULTI_SPECIES_RATIO = 0.60
 # Minimum frames the runner-up must appear in.
-_MULTI_SPECIES_MIN_FRAMES = 2
+_MULTI_SPECIES_MIN_FRAMES = 3
 
 
 @dataclass
@@ -81,7 +81,9 @@ class Aggregator:
 
         animal_frames = [r for r in records if any(b.is_animal for b in r.boxes)]
         person_frames = [r for r in records if any(b.is_person for b in r.boxes)]
-        humans_present = bool(person_frames)
+        detection_frames = [
+            r for r in records if any(b.is_animal or b.is_person for b in r.boxes)
+        ]
 
         if not animal_frames and not person_frames:
             return VideoResult(
@@ -100,54 +102,30 @@ class Aggregator:
                 is_night_ir=is_night_ir,
             )
 
-        # Humans only — no wildlife in clip
-        if not animal_frames and person_frames:
-            person_confs = [
-                b.confidence for r in person_frames for b in r.boxes if b.is_person
-            ]
-            max_people = max(
-                sum(1 for b in r.boxes if b.is_person) for r in person_frames
-            )
-            mean_conf = sum(person_confs) / len(person_confs)
-            return VideoResult(
-                recorded_at=recorded_at,
-                species_key="human",
-                common_name="Human",
-                scientific_name="Homo sapiens",
-                count=max(1, max_people),
-                confidence=round(mean_conf, 4),
-                needs_review=False,
-                comments=self._build_comments(is_night_ir=is_night_ir, human_only=True),
-                timestamp_source=timestamp_source,
-                all_species_seen=["human"],
-                total_frames_processed=total,
-                frames_with_animals=0,
-                is_night_ir=is_night_ir,
-            )
-
         # ── Per-frame species vote (one vote per frame, not per box) ──
         species_conf: dict[str, list[float]] = defaultdict(list)
         species_frame_hits: dict[str, int] = defaultdict(int)
 
-        for record in animal_frames:
-            wildlife = [
+        for record in detection_frames:
+            candidates = [
                 c for c in record.classifications
-                if c.species_key not in ("unknown", "human", "none")
+                if c.species_key not in ("unknown", "none")
             ]
-            if not wildlife:
+            if not candidates:
                 continue
-            best = max(wildlife, key=lambda c: c.confidence)
+            best = max(candidates, key=lambda c: c.confidence)
             species_conf[best.species_key].append(best.confidence)
             species_frame_hits[best.species_key] += 1
 
         if not species_conf:
             max_count = max(
-                sum(1 for b in r.boxes if b.is_animal) for r in animal_frames
+                (sum(1 for b in r.boxes if b.is_animal) for r in detection_frames),
+                default=1,
             )
             return self._no_id_result(
                 max_count, is_night_ir, recorded_at,
                 timestamp_source, total, len(animal_frames),
-                humans_present=humans_present,
+                humans_present=bool(person_frames),
             )
 
         species_scores = {k: sum(v) for k, v in species_conf.items()}
@@ -158,14 +136,15 @@ class Aggregator:
         winner_confs = species_conf[winner]
         mean_conf = sum(winner_confs) / len(winner_confs)
 
-        # ── Count: median boxes classified as winner per frame ────────
+        # ── Count: conservative median boxes classified as winner ────
         per_frame_counts: list[int] = []
-        for record in animal_frames:
+        for record in detection_frames:
             n = sum(1 for c in record.classifications if c.species_key == winner)
             if n > 0:
                 per_frame_counts.append(n)
         if per_frame_counts:
-            count = max(1, round(statistics.median(per_frame_counts)))
+            # median_low avoids rounding a split [1, 2] vote up to two animals.
+            count = max(1, statistics.median_low(per_frame_counts))
         else:
             count = 1
 
@@ -188,14 +167,17 @@ class Aggregator:
         if runner_up is not None:
             ratio = species_scores[runner_up] / max(species_scores[winner], 1e-6)
             if (
-                ratio >= _MULTI_SPECIES_RATIO
+                runner_up != "human"
+                and ratio >= _MULTI_SPECIES_RATIO
                 and species_frame_hits[runner_up] >= _MULTI_SPECIES_MIN_FRAMES
             ):
                 multi_species = True
-                other_species = [s for s in all_seen if s != winner]
+                other_species = [s for s in all_seen if s not in (winner, "human")]
 
         from .species import by_key
         winner_entry = by_key(winner)
+        humans_present = "human" in ranked and winner != "human"
+        human_only = winner == "human" and not any(k != "human" for k in ranked)
         comments = self._build_comments(
             is_night_ir=is_night_ir,
             multiple=multi_species,
@@ -204,6 +186,7 @@ class Aggregator:
             tie=tie,
             tie_species=runner_up,
             humans_present=humans_present,
+            human_only=human_only,
         )
 
         return VideoResult(

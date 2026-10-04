@@ -14,6 +14,8 @@ from __future__ import annotations
 import ctypes
 import logging
 import queue
+import shutil
+import subprocess
 import sys
 import threading
 from datetime import datetime
@@ -28,29 +30,52 @@ logger = logging.getLogger(__name__)
 _ASSETS_FONTS = Path(__file__).parent.parent / "assets" / "fonts"
 
 # ── Font bootstrap ─────────────────────────────────────────────────────────────
-_FONT_FAMILY = "Segoe UI"   # overwritten to "Inter" if files load successfully
+_FONT_FAMILY = "DejaVu Sans" if sys.platform.startswith("linux") else "Segoe UI"
+# Overwritten to Inter below when the bundled files can be registered.
 
 
 def _load_custom_fonts() -> None:
-    """Load Inter TTF into GDI for this process only (AddFontResourceEx FR_PRIVATE).
-    Runs once at import time; has no visible effect on compute after startup."""
+    """Load Inter for this process on Windows or into the user's Linux fonts.
+
+    Runs once at import time; has no visible effect on compute after startup.
+    """
     global _FONT_FAMILY
-    if sys.platform != "win32":
-        return
     try:
-        gdi32 = ctypes.windll.gdi32
-        FR_PRIVATE = 0x10
-        loaded = 0
-        for fname in ("Inter-Regular.ttf", "Inter-Medium.ttf", "Inter-SemiBold.ttf"):
-            fp = _ASSETS_FONTS / fname
-            if fp.exists():
-                if gdi32.AddFontResourceExW(str(fp), FR_PRIVATE, None) > 0:
+        font_files = ("Inter-Regular.ttf", "Inter-Medium.ttf", "Inter-SemiBold.ttf")
+        if sys.platform == "win32":
+            gdi32 = ctypes.windll.gdi32
+            FR_PRIVATE = 0x10
+            loaded = sum(
+                1 for fname in font_files
+                if (_ASSETS_FONTS / fname).exists()
+                and gdi32.AddFontResourceExW(str(_ASSETS_FONTS / fname), FR_PRIVATE, None) > 0
+            )
+        elif sys.platform.startswith("linux"):
+            # Tk on Linux only sees installed fonts. Keep these user-local and
+            # refresh fontconfig before creating the Tk root window.
+            font_dir = Path.home() / ".fonts"
+            font_dir.mkdir(parents=True, exist_ok=True)
+            loaded = 0
+            for fname in font_files:
+                source = _ASSETS_FONTS / fname
+                if source.exists():
+                    shutil.copy2(source, font_dir / fname)
                     loaded += 1
+            if loaded:
+                subprocess.run(
+                    ["fc-cache", "-f", str(font_dir)],
+                    check=False,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+        else:
+            loaded = 0
+
         if loaded:
             _FONT_FAMILY = "Inter"
             logger.debug("Inter font loaded (%d weight(s))", loaded)
     except Exception as exc:
-        logger.debug("Custom font unavailable (%s) — using Segoe UI", exc)
+        logger.debug("Custom font unavailable (%s) — using platform fallback", exc)
 
 
 _load_custom_fonts()
@@ -297,8 +322,9 @@ class _App:
 
         root = self._root
 
-        # Frameless + taskbar entry
-        root.overrideredirect(True)
+        # Keep the custom frameless window on Windows. On Linux, native window
+        # decorations are needed for reliable minimize/restore behavior.
+        root.overrideredirect(sys.platform == "win32")
         root.geometry(f"{self.WIN_W}x{self.WIN_H}")
         root.minsize(740, 560)
         root.configure(bg=_C["bg"])
@@ -649,7 +675,6 @@ class _App:
                 pr = pipeline.process_video(
                     video_path,
                     progress_callback=frame_cb,
-                    save_crops=cfg.save_crops,
                 )
 
                 if pr.error:
@@ -730,7 +755,17 @@ class _App:
         dlg.title("Settings")
         dlg.geometry("580x620")
         dlg.resizable(False, False)
-        dlg.grab_set()
+        dlg.transient(self._root)
+
+        def grab_when_visible() -> None:
+            if not dlg.winfo_exists():
+                return
+            if dlg.winfo_viewable():
+                dlg.grab_set()
+            else:
+                dlg.after(20, grab_when_visible)
+
+        dlg.after_idle(grab_when_visible)
         dlg.configure(fg_color=_C["bg"])
 
         hdr = ctk.CTkFrame(dlg, fg_color=_C["header_bg"], corner_radius=0, height=52)
@@ -760,8 +795,6 @@ class _App:
                 ("Max frames per video",         "max_frames_per_video"),
             ]),
             ("Output", [
-                ("Save animal crops",            "save_crops"),
-                ("Crops output folder",          "crops_dir"),
                 ("CSV backup path",              "output_csv"),
                 ("Custom ONNX classifier",       "custom_classifier_path"),
             ]),

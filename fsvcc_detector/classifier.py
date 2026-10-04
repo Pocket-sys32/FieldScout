@@ -4,23 +4,15 @@ Species classifier — three backends, selected automatically.
 Priority order
 ──────────────
 1. Phase-2 ONNX  – fine-tuned EfficientNet-B0 (best accuracy, requires training)
-2. SpeciesNet    – Google's camera-trap classifier (great IR support, requires
-                   a free Kaggle API token on first download)
+2. SpeciesNet    – Google's camera-trap classifier (great IR support)
 3. CLIP          – OpenAI zero-shot fallback (no setup, decent accuracy)
 
 SpeciesNet is specifically trained on Wildlife Insights camera-trap data,
 including millions of night-IR frames, making it much better suited to
 Bushnell footage than CLIP.
 
-SpeciesNet setup (one-time, free)
-──────────────────────────────────
-1. Create a free account at https://www.kaggle.com
-2. Go to Account → Settings → API → Create New Token
-3. Download kaggle.json and save it to  C:\\Users\\<you>\\.kaggle\\kaggle.json
-4. The model (~500 MB) downloads automatically on first run and is cached.
-
-If kaggle.json is not present the app falls back to CLIP automatically
-and logs a warning.
+The model downloads automatically on first use. If SpeciesNet cannot load,
+the application falls back to CLIP and logs the reason.
 """
 
 from __future__ import annotations
@@ -32,14 +24,20 @@ from pathlib import Path
 
 import numpy as np
 
-from .species import SPECIES_LIST, HUMAN_ENTRY, _BIRD_CLASS_HINTS, all_prompts, by_key
+from .species import (
+    CLIP_SPECIES_LIST,
+    SPECIES_LIST,
+    _BIRD_CLASS_HINTS,
+    all_prompts,
+    by_key,
+)
 
 logger = logging.getLogger(__name__)
 
 _load_lock = threading.Lock()
 
 # ── Kaggle model identifier for SpeciesNet ────────────────────────────────────
-_SPECIESNET_MODEL = "google/speciesnet/pyTorch/v4.0.2a/1"
+_SPECIESNET_MODEL = "kaggle:google/speciesnet/pyTorch/v4.0.3a/1"
 
 
 # ── Result type ───────────────────────────────────────────────────────────────
@@ -87,11 +85,9 @@ class _SpeciesNetClassifier:
             )
             try:
                 from speciesnet import SpeciesNetClassifier  # type: ignore
-                import kagglehub  # type: ignore  (installed with speciesnet)
 
-                model_dir = kagglehub.model_download(_SPECIESNET_MODEL)
                 self._model = SpeciesNetClassifier(
-                    model_name=model_dir,
+                    model_name=_SPECIESNET_MODEL,
                     device=self.device,
                 )
                 logger.info("SpeciesNet ready on %s", self.device.upper())
@@ -100,10 +96,9 @@ class _SpeciesNetClassifier:
                 # Friendly message for the most common failure
                 if "kaggle" in msg.lower() or "credentials" in msg.lower() or "401" in msg:
                     msg = (
-                        "SpeciesNet requires a Kaggle API token.  "
-                        "See Settings → 'SpeciesNet setup' in the README, or "
-                        "place kaggle.json in C:\\Users\\<you>\\.kaggle\\  "
-                        "Falling back to CLIP."
+                        "SpeciesNet could not download its public Kaggle model. "
+                        "Check the internet connection or configure Kaggle "
+                        "credentials, then restart. Falling back to CLIP."
                     )
                 self._load_error = msg
                 raise RuntimeError(msg) from exc
@@ -254,7 +249,7 @@ class _ClipClassifier:
             feats = self._model.get_text_features(**inputs)
             feats = _extract_tensor(feats)
             feats = feats / feats.norm(dim=-1, keepdim=True)
-        n = len(SPECIES_LIST)
+        n = len(CLIP_SPECIES_LIST)
         averaged = torch.zeros(n, feats.shape[-1], device=self.device)
         counts   = torch.zeros(n, device=self.device)
         for i, sp_idx in enumerate(indices):
@@ -284,9 +279,9 @@ class _ClipClassifier:
         probs = sims[0].cpu().numpy()
         order = probs.argsort()[::-1]
         top_idx = order[0]
-        sp = SPECIES_LIST[top_idx]
+        sp = CLIP_SPECIES_LIST[top_idx]
         top3 = [
-            (SPECIES_LIST[i]["common_name"], float(probs[i]))
+            (CLIP_SPECIES_LIST[i]["common_name"], float(probs[i]))
             for i in order[:3]
         ]
         return ClassificationResult(

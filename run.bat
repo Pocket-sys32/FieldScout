@@ -18,17 +18,35 @@ if "%PYTHON%"=="" (
     exit /b 1
 )
 
+:: Create an isolated virtual environment; never install into system Python.
+if not exist ".venv\Scripts\python.exe" (
+    echo Creating isolated Python environment...
+    "%PYTHON%" -m venv .venv
+    if errorlevel 1 (
+        echo ERROR: Could not create the virtual environment.
+        pause
+        exit /b 1
+    )
+)
+set PYTHON=.venv\Scripts\python.exe
+
 :: Install dependencies on first run
-if not exist ".deps_installed" (
+if not exist ".venv\.deps_installed" (
     echo Installing dependencies - one-time setup, may take several minutes...
     "%PYTHON%" -m pip install --upgrade pip
+    "%PYTHON%" -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+    if errorlevel 1 (
+        echo ERROR: CPU-only PyTorch installation failed.
+        pause
+        exit /b 1
+    )
     "%PYTHON%" -m pip install -r requirements.txt
     if errorlevel 1 (
         echo ERROR: Dependency installation failed.
         pause
         exit /b 1
     )
-    echo. > .deps_installed
+    echo. > .venv\.deps_installed
 )
 
 :: Launch

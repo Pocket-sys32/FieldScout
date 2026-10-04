@@ -16,9 +16,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
 
-import cv2
-import numpy as np
-
 from .aggregate import Aggregator, FrameRecord, VideoResult
 from .classifier import SpeciesClassifier
 from .config import cfg
@@ -99,8 +96,6 @@ class Pipeline:
         self,
         video_path: str | Path,
         progress_callback: ProgressCallback | None = None,
-        save_crops: bool = False,
-        crops_dir: str | Path | None = None,
     ) -> ProcessingResult:
         """
         Process a single .mov file end-to-end.
@@ -133,7 +128,6 @@ class Pipeline:
         )
         total = len(frames_iter)
         records: list[FrameRecord] = []
-        _crops_dir = Path(crops_dir or cfg.crops_dir_resolved)
 
         _detector_failed = False
 
@@ -174,9 +168,6 @@ class Pipeline:
                             top3=[("human", box.confidence)],
                             backend="megadetector",
                         ))
-                        if save_crops:
-                            crop = self.detector.crop(vframe.image, box)
-                            _save_crop(crop, path, i, "human", _crops_dir)
                         continue
 
                     crop = self.detector.crop(vframe.image, box)
@@ -186,9 +177,6 @@ class Pipeline:
                         box_norm=(box.x1, box.y1, box.x2, box.y2),
                     )
                     classifications.append(clf)
-
-                    if save_crops:
-                        _save_crop(crop, path, i, clf.species_key, _crops_dir)
 
                 except Exception as exc:
                     logger.warning("Classifier error on frame %d of %s: %s", i, path.name, exc)
@@ -275,7 +263,6 @@ class Pipeline:
             pr = self.process_video(
                 video_path,
                 progress_callback=progress_callback,
-                save_crops=cfg.save_crops,
             )
             results.append(pr)
 
@@ -290,8 +277,6 @@ class Pipeline:
 
         return results
 
-
-# ── Crop saving helper ────────────────────────────────────────────────────────
 
 _VIDEO_SUFFIXES = {".mov", ".avi", ".mp4", ".mkv", ".mts", ".mpeg", ".mpg"}
 
@@ -310,20 +295,3 @@ def _find_videos(folder: Path) -> list[Path]:
 def _normalize_filename(name: str) -> str:
     """Case-insensitive filename key for skip-list matching."""
     return name.strip().lower()
-
-
-def _save_crop(
-    crop: np.ndarray,
-    video_path: Path,
-    frame_idx: int,
-    species_key: str,
-    crops_dir: Path,
-) -> None:
-    """Save an animal crop JPEG for later volunteer review / Phase-2 training."""
-    import cv2
-
-    dest = crops_dir / species_key
-    dest.mkdir(parents=True, exist_ok=True)
-    stem = f"{video_path.stem}_f{frame_idx:04d}"
-    out  = dest / f"{stem}.jpg"
-    cv2.imwrite(str(out), crop, [cv2.IMWRITE_JPEG_QUALITY, 90])

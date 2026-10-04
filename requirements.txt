@@ -1,6 +1,7 @@
 # ── Wildlife Detection ────────────────────────────────────────────────────────
 # MegaDetector v6 via PytorchWildlife (Microsoft)
 PytorchWildlife>=0.5.0
+speciesnet>=5.0.5,<6.0
 torch>=2.1.0
 torchvision>=0.16.0
 # PytorchWildlife bioacoustics dependencies (required even for vision-only use)
@@ -30,11 +31,6 @@ numpy>=1.26.0
 python-dateutil>=2.8.2
 tqdm>=4.66.0
 requests>=2.31.0
-
-# ── Phase-2 Training (Colab / workstation only) ───────────────────────────────
-# timm>=0.9.12           # EfficientNet-B0 for fine-tuning
-# onnx>=1.15.0           # Export trained model to ONNX
-# onnxruntime>=1.16.3    # Inference with custom ONNX model
 
 # ── Packaging ─────────────────────────────────────────────────────────────────
 # pyinstaller>=6.3.0     # Uncomment when building .exe

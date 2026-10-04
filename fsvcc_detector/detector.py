@@ -234,7 +234,35 @@ class AnimalDetector:
                 label=label,
             ))
 
-        return boxes
+        return self._deduplicate_boxes(boxes)
+
+    @staticmethod
+    def _deduplicate_boxes(boxes: list[AnimalBox]) -> list[AnimalBox]:
+        """Discard strongly overlapping boxes of the same class.
+
+        MegaDetector normally performs suppression itself, but an additional
+        conservative pass prevents duplicate boxes from inflating animal counts.
+        """
+        kept: list[AnimalBox] = []
+        for candidate in sorted(boxes, key=lambda box: box.confidence, reverse=True):
+            if any(
+                candidate.label == existing.label
+                and AnimalDetector._intersection_over_union(candidate, existing) >= 0.65
+                for existing in kept
+            ):
+                continue
+            kept.append(candidate)
+        return kept
+
+    @staticmethod
+    def _intersection_over_union(a: AnimalBox, b: AnimalBox) -> float:
+        left = max(a.x1, b.x1)
+        top = max(a.y1, b.y1)
+        right = min(a.x2, b.x2)
+        bottom = min(a.y2, b.y2)
+        intersection = max(0.0, right - left) * max(0.0, bottom - top)
+        union = a.area + b.area - intersection
+        return intersection / union if union > 0 else 0.0
 
     # ------------------------------------------------------------------
     def detect(self, bgr: np.ndarray) -> list[AnimalBox]:
